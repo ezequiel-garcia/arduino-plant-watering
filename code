@@ -1,0 +1,154 @@
+// Librery to use another pins for a Serial communication. 
+#include <SoftwareSerial.h>
+#include "millisDelay.h"  // to create a delay without pausing all the program
+
+millisDelay milDelay;
+
+
+//Bluetooth
+SoftwareSerial myBT(3,11);     //3 RX, 11 TX
+//char myChar;
+
+//Moisture
+#define SensorPin A0
+float sensorValue = 0;
+
+// Water pump
+int fill = 4;
+
+volatile bool changeWater;
+volatile bool water;
+bool addWater = false;
+
+
+
+void setup() {
+  
+  pinMode(fill, OUTPUT);
+  pinMode(2, INPUT);
+  
+  // interrupt when no water
+   attachInterrupt(digitalPinToInterrupt(2), waterChange, CHANGE);
+
+   // Check If there is water
+   water = digitalRead(2);
+   if(!water){
+    myBT.println("Water empty!! Plase fill it.");
+   }
+
+   changeWater = false;
+
+  Serial.begin(9600);
+  Serial.println("Ready");
+
+
+  myBT.begin(9600);    
+  myBT.println("Connection ON");
+
+  milDelay.start(1000);
+
+}
+
+void loop() {
+  
+  if(milDelay.justFinished()){
+    sensorValue = analogRead(SensorPin);
+    myBT.println("Moisture: " + (String)sensorValue);
+    Serial.println("Moisture: " + (String)sensorValue);
+  
+    if(sensorValue <= 300){
+      if(water == true){  
+        addWater1();
+      } else {
+        myBT.println("No Water. Plese Fill!");
+        Serial.println("No Water. Plese Fill!");
+
+      }
+    }
+    milDelay.start(10000); 
+  }
+
+
+  if(changeWater == true){
+    if(!digitalRead(2)){
+     myBT.println("Water empty!! Plase add.");
+     Serial.println("Water empty, Please add");
+     water = false;
+  } else {
+      myBT.println("Water filled");
+      Serial.println("Water filled");
+      water = true;
+  }
+  changeWater = false;
+
+  }
+
+  // Check if there is data by bluetooth
+
+   if(myBT.available()){     // Read BT and send to Arduino
+     char myChar = myBT.read();
+     Serial.write(myChar);
+    if(myChar == '1'){
+      addOnceWater();
+    } else {
+        myBT.println("Invalid Code");
+    }
+    
+  }
+  
+} // FINISH LOOP
+
+
+ void addOnceWater(){
+
+    if(water){
+        sensorValue = analogRead(SensorPin);
+        myBT.println("Moisture: " + (String)sensorValue);
+       digitalWrite(fill, HIGH);
+       delay(4000);
+       digitalWrite(fill, LOW);
+       delay(2000);
+        sensorValue = analogRead(SensorPin);
+        myBT.println("Moisture: " + (String)sensorValue);
+        Serial.println("Moisture: " + (String)sensorValue);
+
+      }else {
+        myBT.println("No Water. Plese Fill!");
+         Serial.println("No water, Please Fill");
+
+      }
+}
+
+
+void addWater1(){
+    while(sensorValue < 300 && water == true){
+      //add water
+      digitalWrite(fill, HIGH);
+      delay(4000);
+      //close water
+      digitalWrite(fill, LOW);
+      delay(5000);
+      //check moisture value
+      sensorValue = analogRead(SensorPin);
+    }
+    // After adding the water send the moisture value
+    myBT.println("Moisture: " + (String)sensorValue);
+    Serial.println("Moisture: " + (String)sensorValue);
+}
+
+void waterChange(){
+
+  changeWater = true;
+  if(!digitalRead(2)){
+     water = false;
+  } else {
+      water = true;
+  }
+}
+
+
+
+
+  // delay(7200000); 2 hours
+  
+ 
